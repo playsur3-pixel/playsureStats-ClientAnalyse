@@ -1,180 +1,172 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { GrenadesPanel } from '../components/GrenadesPanel';
-import { KillFeed } from '../components/KillFeed';
-import { MatchHeader } from '../components/MatchHeader';
-import { PlayerSelect } from '../components/PlayerSelect';
-import { RoundTabs } from '../components/RoundTabs';
-import { RoundsTable } from '../components/RoundsTable';
-import { ComparisonTable, StatCards } from '../components/StatCards';
-import { parseMatch } from '../lib/parser';
-import {
-  buildKillFeed,
-  getCompareRows,
-  getGlobalPlayerStats,
-  getGlobalTeamAverageStats,
-  getRoundPlayerStats,
-  getSelectionLabel,
-  getTeamAverageRoundStats,
-  getRoundsFromSelection,
-} from '../lib/stats';
-import { clearPayload, loadPayload, loadUiState, saveUiState } from '../lib/storage';
-
-export function MatchPage() {
-  const navigate = useNavigate();
-  const payload = loadPayload();
-  const vm = useMemo(() => (payload ? parseMatch(payload.json) : null), [payload]);
-  const initialUi = loadUiState();
-
-  const [playerSteamId, setPlayerSteamId] = useState<string | null>(initialUi.playerSteamId);
-  const [selectedGroup, setSelectedGroup] = useState<string>(
-    typeof initialUi.roundNumber === 'number' ? 'global' : 'global'
-  );
-
-  useEffect(() => {
-    if (!vm) return;
-    if (!playerSteamId) setPlayerSteamId(vm.players[0]?.steamId ?? null);
-  }, [vm, playerSteamId]);
-
-  useEffect(() => {
-    if (!vm || !playerSteamId) return;
-    saveUiState({ playerSteamId, roundNumber: 'global' });
-  }, [vm, playerSteamId, selectedGroup]);
-
-  if (!payload || !vm) {
-    return (
-      <section className="panel">
-        <h2>Aucun match chargé</h2>
-        <p className="muted">Upload un JSON depuis l'onglet Upload pour démarrer l'analyse.</p>
-      </section>
-    );
-  }
-
-  if (!playerSteamId) return null;
-
-  const selectedRounds = getRoundsFromSelection(selectedGroup, vm);
-  const isGlobal = selectedGroup === 'global';
-
-  const playerStats = isGlobal
-    ? getGlobalPlayerStats(vm, playerSteamId)
-    : aggregateSelectionPlayerStats(vm, playerSteamId, selectedRounds);
-
-  const teamStats = isGlobal
-    ? getGlobalTeamAverageStats(vm, playerSteamId)
-    : aggregateSelectionTeamStats(vm, playerSteamId, selectedRounds);
-
-  const compareRows = getCompareRows(playerStats, teamStats);
-
-  const killFeed =
-    selectedRounds.length === 1
-      ? buildKillFeed(vm, selectedRounds[0])
-      : [];
-
-  return (
-    <div className="stack-lg">
-      <MatchHeader vm={vm} />
-
-      <div className="actions-row">
-        <PlayerSelect players={vm.players} value={playerSteamId} onChange={setPlayerSteamId} />
-
-        <section className="panel compact-panel">
-          <p className="eyebrow">Persistance</p>
-          <h3>JSON local 24h</h3>
-          <p className="muted">Tu peux changer d'onglet ou de page sans perdre la session.</p>
-          <div className="action-buttons">
-            <button className="secondary-btn" onClick={() => navigate('/')}>Changer de fichier</button>
-            <button className="danger-btn" onClick={() => { clearPayload(); navigate('/'); }}>Supprimer la session</button>
-          </div>
-        </section>
-      </div>
-
-      <StatCards player={playerStats} team={teamStats} />
-      <RoundTabs vm={vm} selected={selectedGroup} onSelect={setSelectedGroup} />
-      <GrenadesPanel player={playerStats} team={teamStats} isGlobal={isGlobal} />
-      <ComparisonTable rows={compareRows} />
-      <RoundsTable vm={vm} playerSteamId={playerSteamId} selectedGroup={selectedGroup} />
-
-      {selectedRounds.length === 1 ? <KillFeed kills={killFeed} /> : null}
-
-      <section className="panel compact-panel">
-        <p className="eyebrow">Vue active</p>
-        <h3>{getSelectionLabel(selectedGroup, vm)}</h3>
-        <p className="muted">
-          {selectedRounds.length === vm.rounds.length
-            ? 'Analyse globale du match.'
-            : `Analyse appliquée aux rounds : ${selectedRounds.join(', ')}`}
-        </p>
-      </section>
-    </div>
-  );
+:root {
+  font-family: Inter, Arial, sans-serif;
+  color: #e8eef9;
+  background: #08111f;
 }
 
-function aggregateSelectionPlayerStats(vm: ReturnType<typeof parseMatch>, playerSteamId: string, rounds: number[]) {
-  const rows = rounds.map((round) => getRoundPlayerStats(vm, playerSteamId, round));
-
-  const avg = (values: Array<number | null>) => {
-    const filtered = values.filter((v): v is number => v != null);
-    if (!filtered.length) return null;
-    return filtered.reduce((a, b) => a + b, 0) / filtered.length;
-  };
-
-  const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
-  const kills = sum(rows.map((r) => r.kills));
-  const deaths = sum(rows.map((r) => r.deaths));
-
-  return {
-    roundNumber: 0,
-    side: '?',
-    timeFirstKillSec: avg(rows.map((r) => r.timeFirstKillSec)),
-    timeFirstDeathSec: avg(rows.map((r) => r.timeFirstDeathSec)),
-    grenades: {
-      total: sum(rows.map((r) => r.grenades.total)),
-      smoke: sum(rows.map((r) => r.grenades.smoke)),
-      flash: sum(rows.map((r) => r.grenades.flash)),
-      he: sum(rows.map((r) => r.grenades.he)),
-      molotov: sum(rows.map((r) => r.grenades.molotov)),
-      incendiary: sum(rows.map((r) => r.grenades.incendiary)),
-    },
-    tradeKills: sum(rows.map((r) => r.tradeKills)),
-    revengeKills: sum(rows.map((r) => r.revengeKills)),
-    kills,
-    deaths,
-    kd: deaths === 0 ? kills : kills / deaths,
-  };
+* {
+  box-sizing: border-box;
 }
 
-function aggregateSelectionTeamStats(vm: ReturnType<typeof parseMatch>, playerSteamId: string, rounds: number[]) {
-  const player = vm.players.find((p) => p.steamId === playerSteamId);
-  const teamIds = vm.players.filter((p) => p.teamName === player?.teamName).map((p) => p.steamId);
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
 
-  const rows = teamIds.map((id) => aggregateSelectionPlayerStats(vm, id, rounds));
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(255, 119, 0, 0.18), transparent 30%),
+    linear-gradient(180deg, #07101d 0%, #091425 100%);
+  color: #e8eef9;
+}
 
-  const avg = (values: Array<number | null>) => {
-    const filtered = values.filter((v): v is number => v != null);
-    if (!filtered.length) return null;
-    return filtered.reduce((a, b) => a + b, 0) / filtered.length;
-  };
+button,
+select,
+input {
+  font: inherit;
+}
 
-  const avgKills = avg(rows.map((r) => r.kills)) ?? 0;
-  const avgDeaths = avg(rows.map((r) => r.deaths)) ?? 0;
+.app-shell {
+  min-height: 100vh;
+  padding: 24px;
+}
 
-  return {
-    roundNumber: 0,
-    side: '?',
-    timeFirstKillSec: avg(rows.map((r) => r.timeFirstKillSec)),
-    timeFirstDeathSec: avg(rows.map((r) => r.timeFirstDeathSec)),
-    grenades: {
-      total: avg(rows.map((r) => r.grenades.total)) ?? 0,
-      smoke: avg(rows.map((r) => r.grenades.smoke)) ?? 0,
-      flash: avg(rows.map((r) => r.grenades.flash)) ?? 0,
-      he: avg(rows.map((r) => r.grenades.he)) ?? 0,
-      molotov: avg(rows.map((r) => r.grenades.molotov)) ?? 0,
-      incendiary: avg(rows.map((r) => r.grenades.incendiary)) ?? 0,
-    },
-    tradeKills: avg(rows.map((r) => r.tradeKills)) ?? 0,
-    revengeKills: avg(rows.map((r) => r.revengeKills)) ?? 0,
-    kills: avgKills,
-    deaths: avgDeaths,
-    kd: avgDeaths === 0 ? avgKills : avgKills / avgDeaths,
-  };
+.page-wrap {
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.stack-lg {
+  display: grid;
+  gap: 20px;
+}
+
+.panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(11, 19, 35, 0.88);
+  border-radius: 24px;
+  padding: 22px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.24);
+}
+
+.compact-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: #ff9a47;
+  font-size: 0.75rem;
+  margin-bottom: 8px;
+}
+
+.muted {
+  color: #a8b6d8;
+}
+
+.actions-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.primary-btn,
+.secondary-btn,
+.danger-btn {
+  border: 0;
+  cursor: pointer;
+  border-radius: 14px;
+  padding: 12px 16px;
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, #ff7a00, #ff9f3f);
+  color: white;
+}
+
+.secondary-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.danger-btn {
+  background: rgba(255, 99, 99, 0.16);
+  color: #ffb7b7;
+}
+
+.select {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(3, 8, 18, 0.85);
+  color: white;
+  padding: 12px 14px;
+}
+
+.selection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.selection-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #dce8ff;
+  border-radius: 16px;
+  padding: 14px 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.selection-card.active {
+  background: linear-gradient(135deg, rgba(255, 122, 0, 0.22), rgba(255, 159, 63, 0.16));
+  border-color: rgba(255, 140, 60, 0.55);
+  color: #fff;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.stat-card {
+  display: grid;
+  gap: 10px;
+}
+
+.stat-lines {
+  display: grid;
+  gap: 6px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  margin-top: 14px;
+}
+
+.table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 740px;
+}
+
+.table-wrap th,
+.table-wrap td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
 }
