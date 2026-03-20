@@ -2,10 +2,36 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>playSUREStats-ClientAnalyse</title>
+    <title>playSUREStats - ClientAnalyse</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              playsure: {
+                950: '#06101d',
+                900: '#091425',
+                850: '#0b1323',
+                800: '#111c31',
+                700: '#1a2744',
+                orange: '#ff7a00',
+                amber: '#ff9f3f',
+                pale: '#dce8ff',
+                muted: '#a8b6d8'
+              }
+            },
+            boxShadow: {
+              panel: '0 20px 50px rgba(0,0,0,0.24)'
+            }
+          }
+        }
+      }
+    </script>
   </head>
-  <body>
+  <body class="bg-playsure-950">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

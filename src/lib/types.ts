@@ -27,8 +27,6 @@ export type RawRound = {
   teamBSide?: SideCode;
   winnerSide?: SideCode;
   winnerTeamName?: string;
-  teamAStartMoney?: number;
-  teamBStartMoney?: number;
 };
 
 export type RawKill = {
@@ -85,7 +83,6 @@ export type RawMatch = {
   kills?: RawKill[];
   grenadeDestroyed?: RawGrenade[];
   grenades?: RawGrenade[];
-  grenadePositions?: RawGrenade[];
   rounds?: RawRound[];
   playerPositions?: RawPosition[];
   positions?: RawPosition[];
@@ -119,6 +116,7 @@ export type RoundPlayerStats = {
   grenades: GrenadeBreakdown;
   tradeKills: number;
   revengeKills: number;
+  firstKillCount: number;
   kills: number;
   deaths: number;
   kd: number | null;
@@ -132,8 +130,7 @@ export type CompareStat = {
 
 export type RoundSummary = {
   roundNumber: number;
-  score: string;
-  winner: string;
+  winner: 'A' | 'B' | '?';
   sideA: SideLabel;
   sideB: SideLabel;
   playerKills: number;
@@ -141,8 +138,7 @@ export type RoundSummary = {
   playerKd: number | null;
 };
 
-export type RoundGroup = {
-  key: string;
+export type SelectionLine = {
   label: string;
   rounds: number[];
 };
