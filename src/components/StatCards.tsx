@@ -8,25 +8,35 @@ export function StatCards({
   team: RoundPlayerStats;
 }) {
   const cards = [
+    ['Kills', player.kills, team.kills, ''],
+    ['Deaths', player.deaths, team.deaths, ''],
+    ['K/D', player.kd, team.kd, ''],
     ['Time first kill', player.timeFirstKillSec, team.timeFirstKillSec, 's'],
     ['Time first death', player.timeFirstDeathSec, team.timeFirstDeathSec, 's'],
     ['Trade kills', player.tradeKills, team.tradeKills, ''],
     ['Revenge kills', player.revengeKills, team.revengeKills, ''],
-    ['Distance moyenne mates', player.avgMateDistance, team.avgMateDistance, ''],
   ] as const;
 
   return (
-    <section className="stat-grid">
-      {cards.map(([title, p, t, unit]) => (
-        <article className="panel stat-card" key={title}>
-          <p className="eyebrow">Stat</p>
-          <h4>{title}</h4>
-          <div className="stat-lines">
-            <span>Joueur : {p == null ? '—' : Number(p).toFixed(2) + unit}</span>
-            <span>Équipe moy. : {t == null ? '—' : Number(t).toFixed(2) + unit}</span>
-          </div>
-        </article>
-      ))}
+    <section className="panel stat-section">
+      <div className="section-head">
+        <div>
+          <p className="eyebrow">Stats joueur</p>
+          <h3>Vue principale</h3>
+        </div>
+      </div>
+      <div className="stat-grid">
+        {cards.map(([title, p, t, unit]) => (
+          <article className="stat-card-mini" key={title}>
+            <p className="eyebrow">Stat</p>
+            <h4>{title}</h4>
+            <div className="stat-lines">
+              <span>Joueur : {p == null ? '—' : Number(p).toFixed(2) + unit}</span>
+              <span>Équipe moy. : {t == null ? '—' : Number(t).toFixed(2) + unit}</span>
+            </div>
+          </article>
+        ))}
+      </div>
     </section>
   );
 }

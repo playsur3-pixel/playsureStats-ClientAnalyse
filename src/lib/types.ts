@@ -114,12 +114,14 @@ export type GrenadeBreakdown = {
 export type RoundPlayerStats = {
   roundNumber: number;
   side: SideLabel;
+  kills: number;
+  deaths: number;
+  kd: number;
   timeFirstKillSec: number | null;
   timeFirstDeathSec: number | null;
   grenades: GrenadeBreakdown;
   tradeKills: number;
   revengeKills: number;
-  avgMateDistance: number | null;
 };
 
 export type CompareStat = {

@@ -7,8 +7,8 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">playSURE</p>
-          <h1>playSUREStats-ClientAnalyse</h1>
+          <p className="brand-kicker">playSURE<span>stats</span></p>
+          <h1>ClientAnalyse</h1>
         </div>
         <nav className="nav-links">
           <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>

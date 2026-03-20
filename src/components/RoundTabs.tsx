@@ -16,8 +16,8 @@ export function RoundTabs({
     <section className="panel">
       <div className="round-header">
         <div>
-          <p className="eyebrow">Onglets rounds</p>
-          <h3>Global + sélection par round</h3>
+          <p className="eyebrow">Sélection</p>
+          <h3>Global + rounds CT / T</h3>
         </div>
         <button className={selected === 'global' ? 'tab active' : 'tab'} onClick={() => onSelect('global')}>
           Global

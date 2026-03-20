@@ -67,22 +67,12 @@ export function MatchPage() {
         </section>
       </div>
 
-      <RoundTabs vm={vm} playerSteamId={playerSteamId} selected={selectedRound} onSelect={setSelectedRound} />
-      <RoundsTable vm={vm} selected={selectedRound} onSelect={setSelectedRound} />
       <StatCards player={playerStats} team={teamStats} />
+      <RoundTabs vm={vm} playerSteamId={playerSteamId} selected={selectedRound} onSelect={setSelectedRound} />
+      <RoundsTable vm={vm} selected={selectedRound} onSelect={setSelectedRound} playerSteamId={playerSteamId} />
       <GrenadesPanel player={playerStats} team={teamStats} />
       <ComparisonTable rows={compareRows} />
       {selectedRound !== 'global' ? <KillFeed kills={killFeed} /> : null}
-
-      {vm.positions.length === 0 ? (
-        <section className="panel warning-panel">
-          <p className="eyebrow">Info</p>
-          <h3>Distance avec les mates</h3>
-          <p className="muted">
-            Le JSON chargé ne contient pas de playerPositions exploitables, donc cette stat reste vide sur ce match.
-          </p>
-        </section>
-      ) : null}
     </div>
   );
 }

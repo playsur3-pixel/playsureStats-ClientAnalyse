@@ -48,37 +48,6 @@ function tickToSeconds(vm: MatchViewModel, roundNumber: number, tick: number): n
   return Math.max(0, (tick - start) / vm.tickrate);
 }
 
-function euclidean(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
-  const dz = a.z - b.z;
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
-}
-
-function buildDistance(vm: MatchViewModel, roundNumber: number, playerSteamId: string): number | null {
-  const player = getPlayer(vm, playerSteamId);
-  if (!player || vm.positions.length === 0) return null;
-
-  const positions = vm.positions.filter((p) => p.roundNumber === roundNumber && p.playerTeamName === player.teamName);
-  const playerPositions = positions.filter((p) => p.playerSteamId === playerSteamId);
-  const matePositions = positions.filter((p) => p.playerSteamId !== playerSteamId);
-
-  if (!playerPositions.length || !matePositions.length) return null;
-
-  const sample = playerPositions.slice(0, 200);
-  const distances: number[] = [];
-
-  for (const p of sample) {
-    const sameTickMates = matePositions.filter((m) => m.tick === p.tick);
-    if (!sameTickMates.length) continue;
-    const avg = sameTickMates.reduce((acc, mate) => acc + euclidean(p, mate), 0) / sameTickMates.length;
-    distances.push(avg);
-  }
-
-  if (!distances.length) return null;
-  return distances.reduce((a, b) => a + b, 0) / distances.length;
-}
-
 function computeTradeKills(vm: MatchViewModel, roundNumber: number, playerSteamId: string): number {
   const player = getPlayer(vm, playerSteamId);
   if (!player) return 0;
@@ -116,10 +85,16 @@ function firstBy<T>(items: T[], getTick: (item: T) => number): T | null {
   return [...items].sort((a, b) => getTick(a) - getTick(b))[0];
 }
 
+function computeKD(kills: number, deaths: number): number {
+  return deaths === 0 ? kills : kills / deaths;
+}
+
 export function getRoundPlayerStats(vm: MatchViewModel, playerSteamId: string, roundNumber: number): RoundPlayerStats {
   const kills = vm.kills.filter((k) => k.roundNumber === roundNumber);
-  const firstKill = firstBy(kills.filter((k) => k.killerSteamId === playerSteamId), (k) => k.tick);
-  const firstDeath = firstBy(kills.filter((k) => k.victimSteamId === playerSteamId), (k) => k.tick);
+  const playerKills = kills.filter((k) => k.killerSteamId === playerSteamId);
+  const playerDeaths = kills.filter((k) => k.victimSteamId === playerSteamId);
+  const firstKill = firstBy(playerKills, (k) => k.tick);
+  const firstDeath = firstBy(playerDeaths, (k) => k.tick);
 
   const grenades = vm.grenades
     .filter((g) => g.roundNumber === roundNumber && g.throwerSteamId === playerSteamId)
@@ -133,12 +108,14 @@ export function getRoundPlayerStats(vm: MatchViewModel, playerSteamId: string, r
   return {
     roundNumber,
     side: getRoundSide(vm, roundNumber, playerSteamId),
+    kills: playerKills.length,
+    deaths: playerDeaths.length,
+    kd: computeKD(playerKills.length, playerDeaths.length),
     timeFirstKillSec: firstKill ? tickToSeconds(vm, roundNumber, firstKill.tick) : null,
     timeFirstDeathSec: firstDeath ? tickToSeconds(vm, roundNumber, firstDeath.tick) : null,
     grenades,
     tradeKills: computeTradeKills(vm, roundNumber, playerSteamId),
     revengeKills: computeRevengeKills(vm, roundNumber, playerSteamId),
-    avgMateDistance: buildDistance(vm, roundNumber, playerSteamId),
   };
 }
 
@@ -161,6 +138,9 @@ export function getTeamAverageRoundStats(vm: MatchViewModel, playerSteamId: stri
   return {
     roundNumber,
     side: getRoundSide(vm, roundNumber, playerSteamId),
+    kills: average(rows.map((r) => r.kills)) ?? 0,
+    deaths: average(rows.map((r) => r.deaths)) ?? 0,
+    kd: average(rows.map((r) => r.kd)) ?? 0,
     timeFirstKillSec: average(rows.map((r) => r.timeFirstKillSec)),
     timeFirstDeathSec: average(rows.map((r) => r.timeFirstDeathSec)),
     grenades: {
@@ -173,15 +153,19 @@ export function getTeamAverageRoundStats(vm: MatchViewModel, playerSteamId: stri
     },
     tradeKills: average(rows.map((r) => r.tradeKills)) ?? 0,
     revengeKills: average(rows.map((r) => r.revengeKills)) ?? 0,
-    avgMateDistance: average(rows.map((r) => r.avgMateDistance)),
   };
 }
 
 export function getGlobalPlayerStats(vm: MatchViewModel, playerSteamId: string): RoundPlayerStats {
   const rows = vm.rounds.map((r) => getRoundPlayerStats(vm, playerSteamId, r.number));
+  const kills = rows.reduce((sum, r) => sum + r.kills, 0);
+  const deaths = rows.reduce((sum, r) => sum + r.deaths, 0);
   return {
     roundNumber: 0,
     side: '?',
+    kills,
+    deaths,
+    kd: computeKD(kills, deaths),
     timeFirstKillSec: average(rows.map((r) => r.timeFirstKillSec)),
     timeFirstDeathSec: average(rows.map((r) => r.timeFirstDeathSec)),
     grenades: {
@@ -194,7 +178,6 @@ export function getGlobalPlayerStats(vm: MatchViewModel, playerSteamId: string):
     },
     tradeKills: average(rows.map((r) => r.tradeKills)) ?? 0,
     revengeKills: average(rows.map((r) => r.revengeKills)) ?? 0,
-    avgMateDistance: average(rows.map((r) => r.avgMateDistance)),
   };
 }
 
@@ -204,6 +187,9 @@ export function getGlobalTeamAverageStats(vm: MatchViewModel, playerSteamId: str
   return {
     roundNumber: 0,
     side: '?',
+    kills: average(rows.map((r) => r.kills)) ?? 0,
+    deaths: average(rows.map((r) => r.deaths)) ?? 0,
+    kd: average(rows.map((r) => r.kd)) ?? 0,
     timeFirstKillSec: average(rows.map((r) => r.timeFirstKillSec)),
     timeFirstDeathSec: average(rows.map((r) => r.timeFirstDeathSec)),
     grenades: {
@@ -216,18 +202,19 @@ export function getGlobalTeamAverageStats(vm: MatchViewModel, playerSteamId: str
     },
     tradeKills: average(rows.map((r) => r.tradeKills)) ?? 0,
     revengeKills: average(rows.map((r) => r.revengeKills)) ?? 0,
-    avgMateDistance: average(rows.map((r) => r.avgMateDistance)),
   };
 }
 
 export function getCompareRows(playerStats: RoundPlayerStats, teamStats: RoundPlayerStats): CompareStat[] {
   return [
+    { label: 'Kills', player: formatNumber(playerStats.kills), teamAverage: formatNumber(teamStats.kills) },
+    { label: 'Deaths', player: formatNumber(playerStats.deaths), teamAverage: formatNumber(teamStats.deaths) },
+    { label: 'K/D', player: formatNumber(playerStats.kd), teamAverage: formatNumber(teamStats.kd) },
     { label: 'Time first kill', player: formatSeconds(playerStats.timeFirstKillSec), teamAverage: formatSeconds(teamStats.timeFirstKillSec) },
     { label: 'Time first death', player: formatSeconds(playerStats.timeFirstDeathSec), teamAverage: formatSeconds(teamStats.timeFirstDeathSec) },
     { label: 'Grenades totales', player: formatNumber(playerStats.grenades.total), teamAverage: formatNumber(teamStats.grenades.total) },
     { label: 'Trade kills', player: formatNumber(playerStats.tradeKills), teamAverage: formatNumber(teamStats.tradeKills) },
     { label: 'Revenge kills', player: formatNumber(playerStats.revengeKills), teamAverage: formatNumber(teamStats.revengeKills) },
-    { label: 'Distance moyenne mates', player: formatNumber(playerStats.avgMateDistance), teamAverage: formatNumber(teamStats.avgMateDistance) },
   ];
 }
 
@@ -240,8 +227,6 @@ export function buildRoundSummary(vm: MatchViewModel, roundNumber: number) {
     winner: round.winnerTeamName ?? '—',
     sideA: sideToLabel(round.teamASide),
     sideB: sideToLabel(round.teamBSide),
-    startMoneyA: round.teamAStartMoney ?? null,
-    startMoneyB: round.teamBStartMoney ?? null,
   };
 }
 
