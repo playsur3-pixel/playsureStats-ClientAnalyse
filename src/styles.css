@@ -1,241 +1,180 @@
-:root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  color: #edf4ff;
-  background:
-    radial-gradient(circle at top left, rgba(255, 122, 0, 0.14), transparent 24%),
-    radial-gradient(circle at top right, rgba(38, 106, 255, 0.16), transparent 30%),
-    linear-gradient(180deg, #08101f 0%, #0b1630 100%);
-  line-height: 1.5;
-  font-weight: 400;
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { GrenadesPanel } from '../components/GrenadesPanel';
+import { KillFeed } from '../components/KillFeed';
+import { MatchHeader } from '../components/MatchHeader';
+import { PlayerSelect } from '../components/PlayerSelect';
+import { RoundTabs } from '../components/RoundTabs';
+import { RoundsTable } from '../components/RoundsTable';
+import { ComparisonTable, StatCards } from '../components/StatCards';
+import { parseMatch } from '../lib/parser';
+import {
+  buildKillFeed,
+  getCompareRows,
+  getGlobalPlayerStats,
+  getGlobalTeamAverageStats,
+  getRoundPlayerStats,
+  getSelectionLabel,
+  getTeamAverageRoundStats,
+  getRoundsFromSelection,
+} from '../lib/stats';
+import { clearPayload, loadPayload, loadUiState, saveUiState } from '../lib/storage';
+
+export function MatchPage() {
+  const navigate = useNavigate();
+  const payload = loadPayload();
+  const vm = useMemo(() => (payload ? parseMatch(payload.json) : null), [payload]);
+  const initialUi = loadUiState();
+
+  const [playerSteamId, setPlayerSteamId] = useState<string | null>(initialUi.playerSteamId);
+  const [selectedGroup, setSelectedGroup] = useState<string>(
+    typeof initialUi.roundNumber === 'number' ? 'global' : 'global'
+  );
+
+  useEffect(() => {
+    if (!vm) return;
+    if (!playerSteamId) setPlayerSteamId(vm.players[0]?.steamId ?? null);
+  }, [vm, playerSteamId]);
+
+  useEffect(() => {
+    if (!vm || !playerSteamId) return;
+    saveUiState({ playerSteamId, roundNumber: 'global' });
+  }, [vm, playerSteamId, selectedGroup]);
+
+  if (!payload || !vm) {
+    return (
+      <section className="panel">
+        <h2>Aucun match chargé</h2>
+        <p className="muted">Upload un JSON depuis l'onglet Upload pour démarrer l'analyse.</p>
+      </section>
+    );
+  }
+
+  if (!playerSteamId) return null;
+
+  const selectedRounds = getRoundsFromSelection(selectedGroup, vm);
+  const isGlobal = selectedGroup === 'global';
+
+  const playerStats = isGlobal
+    ? getGlobalPlayerStats(vm, playerSteamId)
+    : aggregateSelectionPlayerStats(vm, playerSteamId, selectedRounds);
+
+  const teamStats = isGlobal
+    ? getGlobalTeamAverageStats(vm, playerSteamId)
+    : aggregateSelectionTeamStats(vm, playerSteamId, selectedRounds);
+
+  const compareRows = getCompareRows(playerStats, teamStats);
+
+  const killFeed =
+    selectedRounds.length === 1
+      ? buildKillFeed(vm, selectedRounds[0])
+      : [];
+
+  return (
+    <div className="stack-lg">
+      <MatchHeader vm={vm} />
+
+      <div className="actions-row">
+        <PlayerSelect players={vm.players} value={playerSteamId} onChange={setPlayerSteamId} />
+
+        <section className="panel compact-panel">
+          <p className="eyebrow">Persistance</p>
+          <h3>JSON local 24h</h3>
+          <p className="muted">Tu peux changer d'onglet ou de page sans perdre la session.</p>
+          <div className="action-buttons">
+            <button className="secondary-btn" onClick={() => navigate('/')}>Changer de fichier</button>
+            <button className="danger-btn" onClick={() => { clearPayload(); navigate('/'); }}>Supprimer la session</button>
+          </div>
+        </section>
+      </div>
+
+      <StatCards player={playerStats} team={teamStats} />
+      <RoundTabs vm={vm} selected={selectedGroup} onSelect={setSelectedGroup} />
+      <GrenadesPanel player={playerStats} team={teamStats} isGlobal={isGlobal} />
+      <ComparisonTable rows={compareRows} />
+      <RoundsTable vm={vm} playerSteamId={playerSteamId} selectedGroup={selectedGroup} />
+
+      {selectedRounds.length === 1 ? <KillFeed kills={killFeed} /> : null}
+
+      <section className="panel compact-panel">
+        <p className="eyebrow">Vue active</p>
+        <h3>{getSelectionLabel(selectedGroup, vm)}</h3>
+        <p className="muted">
+          {selectedRounds.length === vm.rounds.length
+            ? 'Analyse globale du match.'
+            : `Analyse appliquée aux rounds : ${selectedRounds.join(', ')}`}
+        </p>
+      </section>
+    </div>
+  );
 }
 
-* { box-sizing: border-box; }
-html, body, #root { min-height: 100%; margin: 0; }
-body { min-height: 100vh; }
-button, select { font: inherit; }
+function aggregateSelectionPlayerStats(vm: ReturnType<typeof parseMatch>, playerSteamId: string, rounds: number[]) {
+  const rows = rounds.map((round) => getRoundPlayerStats(vm, playerSteamId, round));
 
-.app-shell {
-  min-height: 100vh;
-  padding: 20px;
-}
+  const avg = (values: Array<number | null>) => {
+    const filtered = values.filter((v): v is number => v != null);
+    if (!filtered.length) return null;
+    return filtered.reduce((a, b) => a + b, 0) / filtered.length;
+  };
 
-.topbar {
-  max-width: 1440px;
-  margin: 0 auto 24px;
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border: 1px solid rgba(80, 119, 212, 0.28);
-  background: linear-gradient(90deg, rgba(9, 16, 34, 0.96) 0%, rgba(15, 28, 63, 0.96) 100%);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
-  border-radius: 22px;
-}
+  const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
+  const kills = sum(rows.map((r) => r.kills));
+  const deaths = sum(rows.map((r) => r.deaths));
 
-.topbar h1, .panel h2, .panel h3, .panel h4, p { margin: 0; }
-.brand-kicker {
-  font-size: 2rem;
-  font-weight: 900;
-  letter-spacing: -0.03em;
-  color: #ffffff;
-}
-.brand-kicker span { color: #ff7a00; }
-.topbar h1 {
-  font-size: 0.95rem;
-  color: #9bb2df;
-  font-weight: 600;
+  return {
+    roundNumber: 0,
+    side: '?',
+    timeFirstKillSec: avg(rows.map((r) => r.timeFirstKillSec)),
+    timeFirstDeathSec: avg(rows.map((r) => r.timeFirstDeathSec)),
+    grenades: {
+      total: sum(rows.map((r) => r.grenades.total)),
+      smoke: sum(rows.map((r) => r.grenades.smoke)),
+      flash: sum(rows.map((r) => r.grenades.flash)),
+      he: sum(rows.map((r) => r.grenades.he)),
+      molotov: sum(rows.map((r) => r.grenades.molotov)),
+      incendiary: sum(rows.map((r) => r.grenades.incendiary)),
+    },
+    tradeKills: sum(rows.map((r) => r.tradeKills)),
+    revengeKills: sum(rows.map((r) => r.revengeKills)),
+    kills,
+    deaths,
+    kd: deaths === 0 ? kills : kills / deaths,
+  };
 }
 
-.nav-links { display: flex; gap: 10px; flex-wrap: wrap; }
-.nav-links a, .tab {
-  color: #dce8ff;
-  text-decoration: none;
-  padding: 10px 16px;
-  border-radius: 999px;
-  border: 1px solid rgba(87, 123, 215, 0.3);
-  background: rgba(255,255,255,0.03);
-}
-.nav-links a.active, .tab.active {
-  background: linear-gradient(135deg, #ff8a00, #ff6a00);
-  color: white;
-  border-color: transparent;
-}
+function aggregateSelectionTeamStats(vm: ReturnType<typeof parseMatch>, playerSteamId: string, rounds: number[]) {
+  const player = vm.players.find((p) => p.steamId === playerSteamId);
+  const teamIds = vm.players.filter((p) => p.teamName === player?.teamName).map((p) => p.steamId);
 
-.page-wrap {
-  max-width: 1440px;
-  margin: 0 auto;
-}
+  const rows = teamIds.map((id) => aggregateSelectionPlayerStats(vm, id, rounds));
 
-.stack-lg {
-  display: grid;
-  gap: 20px;
-}
+  const avg = (values: Array<number | null>) => {
+    const filtered = values.filter((v): v is number => v != null);
+    if (!filtered.length) return null;
+    return filtered.reduce((a, b) => a + b, 0) / filtered.length;
+  };
 
-.panel {
-  border: 1px solid rgba(80, 119, 212, 0.22);
-  background: linear-gradient(180deg, rgba(9, 18, 39, 0.92), rgba(10, 20, 44, 0.88));
-  border-radius: 24px;
-  padding: 22px;
-  box-shadow: 0 18px 48px rgba(0,0,0,0.26);
-}
+  const avgKills = avg(rows.map((r) => r.kills)) ?? 0;
+  const avgDeaths = avg(rows.map((r) => r.deaths)) ?? 0;
 
-.compact-panel { display: grid; gap: 14px; }
-.hero-panel, .upload-panel, .actions-row {
-  display: grid;
-  gap: 18px;
-}
-.hero-panel {
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  align-items: center;
-}
-.actions-row {
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-}
-.score-boxes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(160px, 1fr));
-  gap: 14px;
-}
-.score-box {
-  padding: 20px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
-  border: 1px solid rgba(91, 128, 222, 0.2);
-  display: grid;
-  gap: 8px;
-}
-.score-box span {
-  font-size: 2rem;
-  font-weight: 800;
-  color: #ff9b33;
-}
-.eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: #7fa0e8;
-  font-size: 0.75rem;
-  margin-bottom: 8px;
-}
-.muted { color: #a8b6d8; }
-.error-text { color: #ff8f8f; margin-top: 12px; }
-
-.primary-btn, .secondary-btn, .danger-btn {
-  border: 0;
-  cursor: pointer;
-  border-radius: 14px;
-  padding: 12px 16px;
-  font-weight: 700;
-}
-.primary-btn { background: linear-gradient(135deg, #ff8a00, #ff6a00); color: white; }
-.secondary-btn { background: rgba(255,255,255,0.08); color: white; }
-.danger-btn { background: rgba(255, 99, 99, 0.16); color: #ffb7b7; }
-.file-pill {
-  display: inline-flex;
-  width: fit-content;
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.06);
-}
-.select {
-  width: 100%;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(3, 8, 18, 0.85);
-  color: white;
-  padding: 12px 14px;
-}
-.round-header, .section-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-.tabs-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
-  gap: 10px;
-}
-.tab {
-  display: grid;
-  gap: 2px;
-  justify-items: center;
-  cursor: pointer;
-}
-.table-wrap {
-  overflow-x: auto;
-  margin-top: 14px;
-}
-.table-wrap table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 740px;
-}
-.table-wrap th, .table-wrap td {
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  text-align: left;
-}
-.table-wrap th { color: #95b0e6; }
-.table-wrap tbody tr { cursor: pointer; }
-.selected-row { background: rgba(255, 122, 0, 0.10); }
-.stat-section { display: grid; gap: 12px; }
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-}
-.stat-card-mini {
-  display: grid;
-  gap: 10px;
-  padding: 18px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025));
-  border: 1px solid rgba(91, 128, 222, 0.2);
-}
-.stat-lines {
-  display: grid;
-  gap: 6px;
-  color: #dce8ff;
-}
-.kill-feed {
-  display: grid;
-  gap: 10px;
-  margin-top: 14px;
-}
-.kill-line {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: rgba(255,255,255,0.04);
-}
-.kill-line strong { text-align: center; color: #ff9b33; }
-.bulletless-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin-top: 16px;
-}
-.mini-card {
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
-}
-.action-buttons {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-@media (max-width: 720px) {
-  .app-shell { padding: 14px; }
-  .topbar { padding: 16px; }
-  .brand-kicker { font-size: 1.6rem; }
-  .panel { padding: 16px; border-radius: 18px; }
-  .table-wrap table { min-width: 640px; }
+  return {
+    roundNumber: 0,
+    side: '?',
+    timeFirstKillSec: avg(rows.map((r) => r.timeFirstKillSec)),
+    timeFirstDeathSec: avg(rows.map((r) => r.timeFirstDeathSec)),
+    grenades: {
+      total: avg(rows.map((r) => r.grenades.total)) ?? 0,
+      smoke: avg(rows.map((r) => r.grenades.smoke)) ?? 0,
+      flash: avg(rows.map((r) => r.grenades.flash)) ?? 0,
+      he: avg(rows.map((r) => r.grenades.he)) ?? 0,
+      molotov: avg(rows.map((r) => r.grenades.molotov)) ?? 0,
+      incendiary: avg(rows.map((r) => r.grenades.incendiary)) ?? 0,
+    },
+    tradeKills: avg(rows.map((r) => r.tradeKills)) ?? 0,
+    revengeKills: avg(rows.map((r) => r.revengeKills)) ?? 0,
+    kills: avgKills,
+    deaths: avgDeaths,
+    kd: avgDeaths === 0 ? avgKills : avgKills / avgDeaths,
+  };
 }

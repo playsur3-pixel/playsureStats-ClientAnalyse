@@ -1,22 +1,22 @@
 import { MatchViewModel } from '../lib/types';
-import { buildRoundSummary, getRoundPlayerStats } from '../lib/stats';
+import { buildRoundSummary, getRoundsFromSelection } from '../lib/stats';
 
 export function RoundsTable({
   vm,
-  selected,
-  onSelect,
   playerSteamId,
+  selectedGroup,
 }: {
   vm: MatchViewModel;
-  selected: number | 'global';
-  onSelect: (round: number) => void;
   playerSteamId: string;
+  selectedGroup: string;
 }) {
+  const selectedRounds = getRoundsFromSelection(selectedGroup, vm);
+
   return (
     <section className="panel">
       <div>
         <p className="eyebrow">Tableau général</p>
-        <h3>Résumé par round</h3>
+        <h3>Résumé des rounds</h3>
       </div>
       <div className="table-wrap">
         <table>
@@ -33,23 +33,25 @@ export function RoundsTable({
             </tr>
           </thead>
           <tbody>
-            {vm.rounds.map((round) => {
-              const summary = buildRoundSummary(vm, round.number);
-              const playerStats = getRoundPlayerStats(vm, playerSteamId, round.number);
-              if (!summary) return null;
-              return (
-                <tr key={round.number} className={selected === round.number ? 'selected-row' : ''} onClick={() => onSelect(round.number)}>
-                  <td>R{summary.roundNumber}</td>
-                  <td>{summary.score}</td>
-                  <td>{summary.winner}</td>
-                  <td>{summary.sideA}</td>
-                  <td>{summary.sideB}</td>
-                  <td>{playerStats.kills}</td>
-                  <td>{playerStats.deaths}</td>
-                  <td>{playerStats.kd.toFixed(2)}</td>
-                </tr>
-              );
-            })}
+            {vm.rounds
+              .filter((round) => selectedRounds.includes(round.number))
+              .map((round) => {
+                const summary = buildRoundSummary(vm, round.number, playerSteamId);
+                if (!summary) return null;
+
+                return (
+                  <tr key={round.number}>
+                    <td>R{summary.roundNumber}</td>
+                    <td>{summary.score}</td>
+                    <td>{summary.winner}</td>
+                    <td>{summary.sideA}</td>
+                    <td>{summary.sideB}</td>
+                    <td>{summary.playerKills}</td>
+                    <td>{summary.playerDeaths}</td>
+                    <td>{summary.playerKd == null ? '—' : summary.playerKd.toFixed(2)}</td>
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
       </div>

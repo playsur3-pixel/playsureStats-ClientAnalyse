@@ -11,7 +11,7 @@ export type SavedPayload = {
 
 export type UIState = {
   playerSteamId: string | null;
-  roundNumber: number | 'global';
+  selectedGroup: string;
 };
 
 export function savePayload(fileName: string, json: unknown) {
@@ -27,6 +27,7 @@ export function savePayload(fileName: string, json: unknown) {
 export function loadPayload(): SavedPayload | null {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
+
   try {
     const payload = JSON.parse(raw) as SavedPayload;
     if (Date.now() > payload.expiresAt) {
@@ -51,10 +52,23 @@ export function saveUiState(state: UIState) {
 
 export function loadUiState(): UIState {
   const raw = localStorage.getItem(UI_KEY);
-  if (!raw) return { playerSteamId: null, roundNumber: 'global' };
+  if (!raw) {
+    return {
+      playerSteamId: null,
+      selectedGroup: 'global',
+    };
+  }
+
   try {
-    return JSON.parse(raw) as UIState;
+    const parsed = JSON.parse(raw) as Partial<UIState>;
+    return {
+      playerSteamId: parsed.playerSteamId ?? null,
+      selectedGroup: parsed.selectedGroup ?? 'global',
+    };
   } catch {
-    return { playerSteamId: null, roundNumber: 'global' };
+    return {
+      playerSteamId: null,
+      selectedGroup: 'global',
+    };
   }
 }

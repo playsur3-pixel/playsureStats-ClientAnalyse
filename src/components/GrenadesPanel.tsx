@@ -3,9 +3,11 @@ import { RoundPlayerStats } from '../lib/types';
 export function GrenadesPanel({
   player,
   team,
+  isGlobal,
 }: {
   player: RoundPlayerStats;
   team: RoundPlayerStats;
+  isGlobal: boolean;
 }) {
   const rows = [
     ['Total', player.grenades.total, team.grenades.total],
@@ -20,7 +22,7 @@ export function GrenadesPanel({
     <section className="panel">
       <div>
         <p className="eyebrow">Utilitaires</p>
-        <h3>All_grenades_throw détaillé</h3>
+        <h3>{isGlobal ? 'Grenades totales' : 'Grenades sur la sélection'}</h3>
       </div>
       <div className="table-wrap">
         <table>

@@ -114,18 +114,35 @@ export type GrenadeBreakdown = {
 export type RoundPlayerStats = {
   roundNumber: number;
   side: SideLabel;
-  kills: number;
-  deaths: number;
-  kd: number;
   timeFirstKillSec: number | null;
   timeFirstDeathSec: number | null;
   grenades: GrenadeBreakdown;
   tradeKills: number;
   revengeKills: number;
+  kills: number;
+  deaths: number;
+  kd: number | null;
 };
 
 export type CompareStat = {
   label: string;
   player: string;
   teamAverage: string;
+};
+
+export type RoundSummary = {
+  roundNumber: number;
+  score: string;
+  winner: string;
+  sideA: SideLabel;
+  sideB: SideLabel;
+  playerKills: number;
+  playerDeaths: number;
+  playerKd: number | null;
+};
+
+export type RoundGroup = {
+  key: string;
+  label: string;
+  rounds: number[];
 };

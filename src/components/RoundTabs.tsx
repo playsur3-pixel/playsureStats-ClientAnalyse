@@ -1,37 +1,34 @@
 import { MatchViewModel } from '../lib/types';
-import { getRoundPlayerStats } from '../lib/stats';
+import { buildRoundGroups } from '../lib/stats';
 
 export function RoundTabs({
   vm,
-  playerSteamId,
   selected,
   onSelect,
 }: {
   vm: MatchViewModel;
-  playerSteamId: string;
-  selected: number | 'global';
-  onSelect: (value: number | 'global') => void;
+  selected: string;
+  onSelect: (value: string) => void;
 }) {
+  const groups = buildRoundGroups(vm.rounds.length);
+
   return (
-    <section className="panel">
-      <div className="round-header">
-        <div>
-          <p className="eyebrow">Sélection</p>
-          <h3>Global + rounds CT / T</h3>
-        </div>
-        <button className={selected === 'global' ? 'tab active' : 'tab'} onClick={() => onSelect('global')}>
-          Global
-        </button>
+    <section className="panel compact-panel">
+      <div>
+        <p className="eyebrow">Sélection</p>
+        <h3>Segments du match</h3>
       </div>
 
-      <div className="tabs-grid">
-        {vm.rounds.map((round) => {
-          const side = getRoundPlayerStats(vm, playerSteamId, round.number).side;
-          const active = selected === round.number;
+      <div className="selection-grid">
+        {groups.map((group) => {
+          const active = selected === group.key;
           return (
-            <button key={round.number} className={active ? 'tab active' : 'tab'} onClick={() => onSelect(round.number)}>
-              <span>R{round.number}</span>
-              <small>{side}</small>
+            <button
+              key={group.key}
+              className={active ? 'selection-card active' : 'selection-card'}
+              onClick={() => onSelect(group.key)}
+            >
+              {group.label}
             </button>
           );
         })}
